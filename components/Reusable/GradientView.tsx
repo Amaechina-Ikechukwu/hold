@@ -9,12 +9,12 @@ interface GradientViewProps {
 
 const GradientView: React.FC<GradientViewProps> = ({ viewStyle, children }) => {
   return (
-    <LinearGradient
-      colors={["#D9D9D9", "#8C8C8C", "#151515"]}
-      style={[styles.gradient, viewStyle]}
-    >
-      <View style={styles.content}>{children}</View>
-    </LinearGradient>
+    // <LinearGradient
+    //   colors={["#161616", "#0D0D0D"]}
+    //   style={[styles.gradient, viewStyle]}
+    // >
+    <View style={styles.content}>{children}</View>
+    // </LinearGradient>
   );
 };
 
@@ -24,6 +24,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    backgroundColor: "#0D0D0D",
   },
 });
 

@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { NotificationProvider } from "@/components/contexts/InAppNotificationContext";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -14,7 +15,8 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    Keania: require("../assets/fonts/KeaniaOne-Regular.ttf"),
+    Lalezar: require("../assets/fonts/Lalezar-Regular.ttf"),
   });
 
   useEffect(() => {
@@ -29,11 +31,28 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
+      <NotificationProvider>
+        <Stack>
+          <Stack.Screen
+            name="index"
+            options={{
+              headerShown: false,
+              statusBarBackgroundColor: "white",
+              contentStyle: { backgroundColor: "#0D0D0D" },
+            }}
+          />
+          <Stack.Screen
+            name="auth"
+            options={{
+              headerShown: false,
+              statusBarTranslucent: true,
+              contentStyle: { backgroundColor: "#0D0D0D" },
+            }}
+          />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+        <StatusBar style="auto" />
+      </NotificationProvider>
     </ThemeProvider>
   );
 }
