@@ -1,8 +1,8 @@
-import { View, Text, Alert } from "react-native";
-import React, { useState } from "react";
+import { View, Text } from "react-native";
+import React, { useState, useEffect } from "react";
 import Keypad from "react-native-simple-keypad";
 import GradientView from "@/components/Reusable/GradientView";
-import { router, useNavigation } from "expo-router";
+import { router } from "expo-router";
 import { mwidth } from "@/components/Reusable/ScreenDimensions";
 import * as SecureStore from "expo-secure-store";
 import * as LocalAuthentication from "expo-local-authentication";
@@ -11,6 +11,16 @@ import { useNotification } from "@/components/contexts/InAppNotificationContext"
 export default function Auth() {
   const [code, setCode] = useState<string>(""); // Store the input code
   const { showNotification } = useNotification();
+  const [storedCode, setStoredCode] = useState<string | null>(null);
+
+  // Fetch stored code on component mount
+  useEffect(() => {
+    const fetchStoredCode = async () => {
+      const savedCode = await SecureStore.getItemAsync("userCode");
+      setStoredCode(savedCode);
+    };
+    fetchStoredCode();
+  }, []);
 
   // Function to handle biometric authentication
   const handleBiometricAuth = async () => {
@@ -38,7 +48,7 @@ export default function Auth() {
 
       if (result.success) {
         showNotification("Biometric Authentication Successful!");
-        // Navigate or perform an action upon successful authentication
+        router.push("/"); // Navigate upon successful authentication
       } else {
         showNotification("Biometric Authentication Failed!");
       }
@@ -49,14 +59,19 @@ export default function Auth() {
 
   // Function to handle code completion
   const handleCodeComplete = async (inputCode: string) => {
-    try {
-      // Save the code securely
-      await SecureStore.setItemAsync("userCode", inputCode);
-      showNotification("Code saved securely!");
-      // Navigate to the next screen or perform another action
-      router.push("/");
-    } catch (error) {
-      showNotification("Failed to save the code. Please try again.");
+    if (storedCode === null) {
+      showNotification(
+        "No PIN code found. Please set up your PIN in the settings."
+      );
+      return;
+    }
+
+    if (inputCode === storedCode) {
+      showNotification("Authentication Successful!");
+      router.push("/"); // Navigate upon successful code entry
+    } else {
+      showNotification("Incorrect Code. Please try again.");
+      setCode(""); // Reset the entered code
     }
   };
 
@@ -98,15 +113,14 @@ export default function Auth() {
           backspaceIconWidth={33}
           bioMetricIconHeight={28}
           bioMetricIconWidth={28}
-          //   disable={code.length === 6}
-          onBioAuthPress={handleBiometricAuth} // Trigger fingerprint authentication
+          onBioAuthPress={handleBiometricAuth} // Trigger biometric authentication
         />
       </View>
 
       <View
         style={{
           position: "absolute",
-          top: mwidth * 0.1,
+          top: "20%",
           left: 0,
           right: 0,
           alignItems: "center",
