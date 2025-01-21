@@ -14,6 +14,7 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 import { NotificationProvider } from "@/components/contexts/InAppNotificationContext";
 import * as SecureStore from "expo-secure-store";
 import { AppState, AppStateStatus } from "react-native";
+import { PushNotificationProvider } from "@/components/Notifications";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -82,26 +83,28 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <NotificationProvider>
-        <Stack>
-          <Stack.Screen
-            name="index"
-            options={{
-              headerShown: false,
-              statusBarBackgroundColor: "white",
-              contentStyle: { backgroundColor: "#0D0D0D" },
-            }}
-          />
-          <Stack.Screen
-            name="auth"
-            options={{
-              headerShown: false,
-              statusBarTranslucent: true,
-              contentStyle: { backgroundColor: "#0D0D0D" },
-            }}
-          />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style="auto" />
+        <PushNotificationProvider>
+          <Stack>
+            <Stack.Screen
+              name="index"
+              options={{
+                headerShown: false,
+                statusBarBackgroundColor: "white",
+                contentStyle: { backgroundColor: "#0D0D0D" },
+              }}
+            />
+            <Stack.Screen
+              name="auth"
+              options={{
+                headerShown: false,
+                statusBarTranslucent: true,
+                contentStyle: { backgroundColor: "#0D0D0D" },
+              }}
+            />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <StatusBar style="auto" />
+        </PushNotificationProvider>
       </NotificationProvider>
     </ThemeProvider>
   );
