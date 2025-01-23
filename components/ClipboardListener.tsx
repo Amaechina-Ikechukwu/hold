@@ -1,109 +1,97 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, StyleSheet } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import * as BackgroundFetch from "expo-background-fetch";
-import * as TaskManager from "expo-task-manager";
 import * as Notifications from "expo-notifications";
-
-import HoldText from "./Reusable/HoldText";
+import {
+  openDatabaseSync,
+  SQLiteDatabase,
+  useSQLiteContext,
+} from "expo-sqlite";
 import { usePushNotification } from "./Notifications";
+import HoldText from "./Reusable/HoldText";
 
-const BACKGROUND_FETCH_TASK = "background-fetch";
 const OTP_REGEX = /\b\d{4,8}\b/;
-
-TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
-  try {
-    const content = await Clipboard.getStringAsync();
-
-    if (content) {
-      const matchedOTP = content.match(OTP_REGEX);
-      if (matchedOTP) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "Hold: Sensitive Content",
-            body: "Will not save the newly copied text...looks sensitive",
-          },
-          trigger: null,
-        });
-      } else {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "Hold: Clipboard Updated",
-            body: "Copied... and Held for you",
-          },
-          trigger: null,
-        });
-      }
-    }
-
-    console.log("Background clipboard check complete.");
-    return BackgroundFetch.BackgroundFetchResult.NewData;
-  } catch (error) {
-    console.error("Background task failed:", error);
-    return BackgroundFetch.BackgroundFetchResult.Failed;
-  }
-});
-
-async function registerBackgroundFetchAsync() {
-  return BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-    minimumInterval: 15 * 60,
-    stopOnTerminate: false,
-    startOnBoot: true,
-  });
-}
 
 const ClipboardListener = () => {
   const [clipboardContent, setClipboardContent] = useState("");
-  const [isRegistered, setIsRegistered] = useState(false);
-
+  const db = useSQLiteContext();
   const { sendNotification } = usePushNotification();
 
+  // Ref to track whether clipboard check is in progress
+  const isCheckingClipboardRef = useRef(false);
+
   useEffect(() => {
-    const setupBackgroundFetch = async () => {
+    const intervalId = setInterval(async () => {
+      if (isCheckingClipboardRef.current) return; // Skip if check is in progress
+      isCheckingClipboardRef.current = true; // Set the flag to true
+
       try {
-        const isRegistered = await TaskManager.isTaskRegisteredAsync(
-          BACKGROUND_FETCH_TASK
+        // Get the current clipboard content
+        const content = await Clipboard.getStringAsync();
+
+        if (content) {
+          const matchedOTP = content.match(OTP_REGEX);
+
+          if (matchedOTP) {
+            // Show notification for sensitive content
+            sendNotification(
+              "Hold: Sensitive Content",
+              "Will not save the newly copied text...looks sensitive"
+            );
+          } else {
+            // Add the content to the database if it's not a duplicate
+            await addClipboardContent(db, content, "text");
+            setClipboardContent(content); // Update the clipboard content in state
+          }
+        }
+      } catch (error) {
+        console.error("Error checking clipboard content:", error);
+      } finally {
+        isCheckingClipboardRef.current = false; // Reset the flag when done
+      }
+    }, 5000); // Check every 5 seconds (5000ms)
+
+    return () => clearInterval(intervalId); // Cleanup interval on component unmount
+  }, [db]); // Only depend on db, not isCheckingClipboard
+
+  // Function to add clipboard content if it's not already in the database
+  async function addClipboardContent(
+    db: SQLiteDatabase,
+    content: string,
+    contentType: string,
+    metadata?: Record<string, any>
+  ): Promise<number> {
+    try {
+      // Check if the content already exists in the database
+      const checkExisting = await db.getFirstAsync(
+        "SELECT COUNT(*) AS count FROM clipboard_content WHERE content = ?",
+        [content]
+      );
+
+      console.log({ checkExisting });
+
+      // Check if the count is greater than 0 (indicating existing content)
+      if (checkExisting.count > 0) {
+        console.log("Content already exists in the database. Not adding.");
+        return -1; // Return a negative number to indicate no insertion occurred
+      } else {
+        // Insert the new content into the database
+        const result = await db.runAsync(
+          "INSERT INTO clipboard_content (content, content_type, metadata) VALUES (?, ?, ?)",
+          content,
+          contentType,
+          metadata ? JSON.stringify(metadata) : null
         );
 
-        if (!isRegistered) {
-          await registerBackgroundFetchAsync();
-          console.log("Background fetch registered successfully.");
-        }
-
-        setIsRegistered(true);
-      } catch (error) {
-        console.error("Error setting up background fetch:", error);
-        setIsRegistered(false);
+        // Optionally, send a notification indicating the content was saved
+        sendNotification("Hold: Sensitive Content", "Saved");
+        return result.lastInsertRowId; // Returns the ID of the inserted row
       }
-    };
-
-    setupBackgroundFetch();
-  }, []);
-
-  useEffect(() => {
-    const checkClipboard = async () => {
-      const content = await Clipboard.getStringAsync();
-      if (content && content !== clipboardContent) {
-        const matchedOTP = content.match(OTP_REGEX);
-        if (matchedOTP) {
-          sendNotification(
-            "Hold: Clipboard message",
-            "Will not save the newly copied text...looks sensitive"
-          );
-        } else {
-          sendNotification(
-            "Hold: Clipboard message",
-            "Copied... and Held for you"
-          );
-        }
-        setClipboardContent(content);
-      }
-    };
-
-    const interval = setInterval(checkClipboard, 1000);
-
-    return () => clearInterval(interval);
-  }, [clipboardContent]);
+    } catch (error) {
+      console.error("Error inserting clipboard content:", error);
+      return -1;
+    }
+  }
 
   return (
     <View style={styles.container}>
@@ -111,9 +99,9 @@ const ClipboardListener = () => {
       <HoldText fontFamily="Lalezar">
         Clipboard Content: {clipboardContent || "No content"}
       </HoldText>
-      <HoldText fontFamily="Lalezar">
-        Background Fetch Registered: {isRegistered ? "Yes" : "No"}
-      </HoldText>
+      <View style={styles.historyContainer}>
+        <HoldText fontFamily="Keania">Clipboard History:</HoldText>
+      </View>
     </View>
   );
 };
@@ -123,6 +111,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  historyContainer: {
+    marginTop: 20,
+    width: "90%",
   },
 });
 

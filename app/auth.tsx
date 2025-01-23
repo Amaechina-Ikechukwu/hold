@@ -1,8 +1,8 @@
 import { View, Text } from "react-native";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Keypad from "react-native-simple-keypad";
 import GradientView from "@/components/Reusable/GradientView";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { mwidth } from "@/components/Reusable/ScreenDimensions";
 import * as SecureStore from "expo-secure-store";
 import * as LocalAuthentication from "expo-local-authentication";
@@ -12,6 +12,13 @@ export default function Auth() {
   const [code, setCode] = useState<string>(""); // Store the input code
   const { showNotification } = useNotification();
   const [storedCode, setStoredCode] = useState<string | null>(null);
+
+  const onFocus = useCallback(() => {
+    // This function will be executed when the screen gains focus
+    handleBiometricAuth();
+  }, []); // Empty dependency array means this function is only created once
+
+  useFocusEffect(onFocus); // Trigger the memoized callback on screen focus
 
   // Fetch stored code on component mount
   useEffect(() => {
