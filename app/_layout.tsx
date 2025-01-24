@@ -7,7 +7,7 @@ import { useFonts } from "expo-font";
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import "react-native-reanimated";
 
 import { useColorScheme } from "@/hooks/useColorScheme";
@@ -16,7 +16,7 @@ import * as SecureStore from "expo-secure-store";
 import { AppState, AppStateStatus } from "react-native";
 import { PushNotificationProvider } from "@/components/Notifications";
 import { SQLiteDatabase, SQLiteProvider } from "expo-sqlite";
-
+import * as DevClient from "expo-dev-client";
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 

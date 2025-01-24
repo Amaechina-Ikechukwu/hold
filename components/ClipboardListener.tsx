@@ -17,44 +17,45 @@ const ClipboardListener = () => {
   const db = useSQLiteContext();
   const { sendNotification } = usePushNotification();
 
-  // Ref to track whether clipboard check is in progress
+  // Ref to store clipboard content without causing re-renders
+  const clipboardContentRef = useRef("");
   const isCheckingClipboardRef = useRef(false);
 
   useEffect(() => {
     const intervalId = setInterval(async () => {
-      if (isCheckingClipboardRef.current) return; // Skip if check is in progress
-      isCheckingClipboardRef.current = true; // Set the flag to true
+      if (isCheckingClipboardRef.current) return;
+
+      isCheckingClipboardRef.current = true;
 
       try {
-        // Get the current clipboard content
         const content = await Clipboard.getStringAsync();
 
-        if (content) {
+        if (content && content !== clipboardContentRef.current) {
           const matchedOTP = content.match(OTP_REGEX);
 
           if (matchedOTP) {
-            // Show notification for sensitive content
             sendNotification(
               "Hold: Sensitive Content",
               "Will not save the newly copied text...looks sensitive"
             );
           } else {
-            // Add the content to the database if it's not a duplicate
-            await addClipboardContent(db, content, "text");
-            setClipboardContent(content); // Update the clipboard content in state
+            const result = await addClipboardContent(db, content, "text");
+            if (result !== -1) {
+              clipboardContentRef.current = content; // Update ref
+              setClipboardContent(content); // Update state only when necessary
+            }
           }
         }
       } catch (error) {
         console.error("Error checking clipboard content:", error);
       } finally {
-        isCheckingClipboardRef.current = false; // Reset the flag when done
+        isCheckingClipboardRef.current = false;
       }
-    }, 5000); // Check every 5 seconds (5000ms)
+    }, 5000);
 
-    return () => clearInterval(intervalId); // Cleanup interval on component unmount
-  }, [db]); // Only depend on db, not isCheckingClipboard
+    return () => clearInterval(intervalId);
+  }, []);
 
-  // Function to add clipboard content if it's not already in the database
   async function addClipboardContent(
     db: SQLiteDatabase,
     content: string,
@@ -62,20 +63,15 @@ const ClipboardListener = () => {
     metadata?: Record<string, any>
   ): Promise<number> {
     try {
-      // Check if the content already exists in the database
       const checkExisting = await db.getFirstAsync(
         "SELECT COUNT(*) AS count FROM clipboard_content WHERE content = ?",
         [content]
       );
 
-      console.log({ checkExisting });
-
-      // Check if the count is greater than 0 (indicating existing content)
       if (checkExisting.count > 0) {
-        console.log("Content already exists in the database. Not adding.");
-        return -1; // Return a negative number to indicate no insertion occurred
+        // console.log("Content already exists in the database. Not adding.");
+        return -1;
       } else {
-        // Insert the new content into the database
         const result = await db.runAsync(
           "INSERT INTO clipboard_content (content, content_type, metadata) VALUES (?, ?, ?)",
           content,
@@ -83,12 +79,11 @@ const ClipboardListener = () => {
           metadata ? JSON.stringify(metadata) : null
         );
 
-        // Optionally, send a notification indicating the content was saved
-        sendNotification("Hold: Sensitive Content", "Saved");
-        return result.lastInsertRowId; // Returns the ID of the inserted row
+        sendNotification("Clipboard Content Saved", "Saved successfully");
+        return result.lastInsertRowId;
       }
     } catch (error) {
-      console.error("Error inserting clipboard content:", error);
+      // console.error("Error inserting clipboard content:", error);
       return -1;
     }
   }
