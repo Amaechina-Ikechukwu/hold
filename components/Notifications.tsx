@@ -142,7 +142,6 @@ export const PushNotificationProvider: React.FC<{
     data: object = {}
   ) => {
     if (!expoPushToken) {
-      console.error("Expo Push Token is not available");
       return;
     }
     await sendPushNotification(expoPushToken, title, body, data);

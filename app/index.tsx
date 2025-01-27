@@ -1,4 +1,4 @@
-import { Image, StyleSheet } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 import * as BackgroundFetch from "expo-background-fetch";
 import * as TaskManager from "expo-task-manager";
 import * as Clipboard from "expo-clipboard"; // Ensure correct import
@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { SQLiteDatabase, useSQLiteContext } from "expo-sqlite";
 import { usePushNotification } from "@/components/Notifications";
 import ClipboardListener from "@/components/ClipboardListener";
+import ClipFlatList from "@/components/ClipFlatList";
 const BACKGROUND_FETCH_TASK = "background-fetch";
 const OTP_REGEX = /\b\d{4,6}\b/; // Example regex for matching OTPs
 
@@ -15,12 +16,24 @@ let lastClipboardContent = "";
 // Define the background fetch task
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
-    console.log(lastClipboardContent);
+    Clipboard.addClipboardListener(
+      ({ contentTypes }: Clipboard.ClipboardEvent) => {
+        if (contentTypes.includes(Clipboard.ContentType.PLAIN_TEXT)) {
+          Clipboard.getStringAsync().then((content) => {
+            console.log(
+              "Copy pasta! Here's the string that was copied: " + content
+            );
+          });
+        } else if (contentTypes.includes(Clipboard.ContentType.IMAGE)) {
+          console.log("Yay! Clipboard contains an image");
+        }
+      }
+    );
     const clipboardContent = await Clipboard.getStringAsync();
 
     if (clipboardContent && clipboardContent !== lastClipboardContent) {
       lastClipboardContent = clipboardContent;
-
+      console.log(clipboardContent);
       // Send a notification about the new clipboard content
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -110,7 +123,7 @@ export default function HomeScreen() {
       } finally {
         isCheckingClipboardRef.current = false;
       }
-    }, 5000);
+    }, 15000);
 
     return () => clearInterval(intervalId);
   }, []);
@@ -144,7 +157,11 @@ export default function HomeScreen() {
     }
   }
 
-  return <ClipboardListener />;
+  return (
+    <View style={{ flex: 1 }}>
+      <ClipFlatList />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
