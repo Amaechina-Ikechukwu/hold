@@ -6,8 +6,9 @@ import * as Notifications from "expo-notifications";
 import { useEffect, useRef, useState } from "react";
 import { SQLiteDatabase, useSQLiteContext } from "expo-sqlite";
 import { usePushNotification } from "@/components/Notifications";
-import ClipboardListener from "@/components/ClipboardListener";
+import TryingClip from "@react-native-community/clipboard";
 import ClipFlatList from "@/components/ClipFlatList";
+import { StatusBar } from "expo-status-bar";
 const BACKGROUND_FETCH_TASK = "background-fetch";
 const OTP_REGEX = /\b\d{4,6}\b/; // Example regex for matching OTPs
 
@@ -16,37 +17,18 @@ let lastClipboardContent = "";
 // Define the background fetch task
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
-    Clipboard.addClipboardListener(
-      ({ contentTypes }: Clipboard.ClipboardEvent) => {
-        if (contentTypes.includes(Clipboard.ContentType.PLAIN_TEXT)) {
-          Clipboard.getStringAsync().then((content) => {
-            console.log(
-              "Copy pasta! Here's the string that was copied: " + content
-            );
-          });
-        } else if (contentTypes.includes(Clipboard.ContentType.IMAGE)) {
-          console.log("Yay! Clipboard contains an image");
-        }
-      }
-    );
-    const clipboardContent = await Clipboard.getStringAsync();
+    // const clipboardContent = await TryingClip.getString();
+    console.log("clipboardContent");
+    // Send a notification about the new clipboard content
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "New Clipboard Content Detected",
+        // body: clipboardContent,
+      },
+      trigger: null, // Immediate notification
+    });
 
-    if (clipboardContent && clipboardContent !== lastClipboardContent) {
-      lastClipboardContent = clipboardContent;
-      console.log(clipboardContent);
-      // Send a notification about the new clipboard content
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "New Clipboard Content Detected",
-          body: clipboardContent,
-        },
-        trigger: null, // Immediate notification
-      });
-
-      return BackgroundFetch.BackgroundFetchResult.NewData;
-    }
-
-    return BackgroundFetch.BackgroundFetchResult.NoData;
+    return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch (error) {
     console.error("Error in background fetch task:", error);
     return BackgroundFetch.BackgroundFetchResult.Failed;
@@ -135,6 +117,11 @@ export default function HomeScreen() {
     metadata?: Record<string, any>
   ): Promise<number> {
     try {
+      if (!db || db.closed) {
+        console.error("Database is closed or not available.");
+        return -1;
+      }
+
       const checkExisting = await db.getFirstAsync(
         "SELECT COUNT(*) AS count FROM clipboard_content WHERE content = ?",
         [content]
@@ -159,6 +146,7 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1 }}>
+      <StatusBar translucent />
       <ClipFlatList />
     </View>
   );

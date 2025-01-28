@@ -54,7 +54,6 @@ export default function Auth() {
       });
 
       if (result.success) {
-        showNotification("Biometric Authentication Successful!");
         router.push("/"); // Navigate upon successful authentication
       } else {
         showNotification("Biometric Authentication Failed!");

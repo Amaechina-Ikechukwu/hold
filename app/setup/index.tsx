@@ -1,80 +1,193 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, Alert } from "react-native";
-import Keypad from "react-native-simple-keypad";
-import GradientView from "@/components/Reusable/GradientView";
-import { useNotification } from "@/components/contexts/InAppNotificationContext";
+import HoldButton from "@/components/Reusable/HoldButton";
+import HoldText from "@/components/Reusable/HoldText";
 import { router, useNavigation } from "expo-router";
-import { mwidth } from "@/components/Reusable/ScreenDimensions";
+import { StatusBar } from "expo-status-bar";
+import React, { useEffect } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  Dimensions,
+  Animated,
+  TouchableOpacity,
+} from "react-native";
 
-export default function PinSetup() {
-  const [code, setCode] = useState<string>(""); // Store the input code
-  const { showNotification } = useNotification();
-  const navigation = useNavigation();
+const { width } = Dimensions.get("window");
 
-  const handleCodeComplete = async (inputCode: string) => {
-    if (inputCode.length === 6) {
-      // Navigate to confirmation step
-      router.push({
-        pathname: "/setup/pin-confirmation",
-        params: { code: inputCode }, // Pass the code to confirmation
-      });
-    }
+const onboardingData = [
+  {
+    id: 1,
+    title: "HOLD: A Secure Clipboard Manager",
+    description:
+      "HOLD is a secure clipboard manager that keeps your clipboard content safe and accessible with persistent storage.",
+  },
+  {
+    id: 2,
+    title: "Persistent Clipboard History",
+    description:
+      "Save clipboard content for as long as you need, with easy access to everything you've copied.",
+  },
+  {
+    id: 3,
+    title: "Categorized Storage",
+    description:
+      "Organize your clipboard entries into customizable categories for a cleaner and more efficient experience.",
+  },
+  {
+    id: 4,
+    title: "Search Functionality",
+    description:
+      "Quickly find specific entries using keywords to navigate your clipboard history with ease.",
+  },
+  {
+    id: 5,
+    title: "Encryption",
+    description:
+      "All clipboard content is encrypted with AES-256, ensuring your sensitive information remains secure.",
+  },
+  {
+    id: 6,
+    title: "Biometric Authentication",
+    description:
+      "Access your clipboard vault using fingerprint or face recognition for added security.",
+  },
+  {
+    id: 7,
+    title: "Auto-Lock & Secure Deletion",
+    description:
+      "Automatically locks the app after inactivity and securely deletes clipboard content to ensure no data is left behind.",
+  },
+];
+
+export default function OnboardingScreen() {
+  const scrollX = React.useRef(new Animated.Value(0)).current;
+
+  const renderItem = ({ item }: { item: (typeof onboardingData)[0] }) => (
+    <View style={styles.slide}>
+      <HoldText fontFamily="Keania" style={{ fontSize: 30 }}>
+        {item.title}
+      </HoldText>
+      <HoldText fontFamily="Lalezar" style={styles.description}>
+        {item.description}
+      </HoldText>
+    </View>
+  );
+
+  const handleNext = () => {
+    router.push("/setup/pin-setup");
   };
+  const navigation = useNavigation();
   useEffect(() => {
-    navigation.setOptions({ headerShown: false });
+    navigation.setOptions({
+      headerShown: false,
+      contentStyle: { backgroundColor: "#0D0D0D" },
+    });
   }, [navigation]);
+
   return (
-    <GradientView
-      viewStyle={{ flex: 1, justifyContent: "center", height: "100%" }}
-    >
-      <View
-        style={{
-          position: "absolute",
-          top: "20%",
-          left: 0,
-          right: 0,
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ fontSize: 18, fontWeight: "500", color: "#FFFFFF" }}>
-          Create Your PIN:
-        </Text>
-        <Text
-          style={{
-            fontSize: 30,
-            fontWeight: "700",
-            color: "#FFFFFF",
-            marginTop: 10,
-          }}
-        >
-          {code.padEnd(6, "_")} {/* Display entered code with placeholders */}
-        </Text>
+    <View style={styles.container}>
+      <StatusBar hidden />
+      <FlatList
+        data={onboardingData}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id.toString()}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: false }
+        )}
+        contentContainerStyle={styles.flatlistContainer}
+      />
+
+      {/* Add Next Button */}
+      <View style={styles.footer}>
+        <HoldButton title="Get Started" onPress={handleNext} />
       </View>
 
-      <View
-        style={{
-          position: "absolute",
-          bottom: mwidth * 0.9,
-          left: 0,
-          right: 0,
-        }}
-      >
-        <Keypad
-          onKeyPress={(value) => {
-            if (typeof value === "string" && value.toLowerCase() === "delete") {
-              setCode((prev) => prev.slice(0, -1)); // Remove last character
-            } else if (code.length < 6) {
-              const newCode = code + value;
-              setCode(newCode);
-
-              if (newCode.length === 6) {
-                handleCodeComplete(newCode); // Call handler when PIN is complete
-              }
-            }
-          }}
-          textStyle={{ fontWeight: "600", fontSize: 30, color: "#7A7A7A" }}
-        />
+      {/* Add indicator for progress */}
+      <View style={styles.dotsContainer}>
+        {onboardingData.map((_, index) => {
+          const inputRange = [
+            (index - 1) * width,
+            index * width,
+            (index + 1) * width,
+          ];
+          const dotWidth = scrollX.interpolate({
+            inputRange,
+            outputRange: [10, 20, 10],
+            extrapolate: "clamp",
+          });
+          return (
+            <Animated.View
+              key={index}
+              style={[styles.dot, { width: dotWidth }]}
+            />
+          );
+        })}
       </View>
-    </GradientView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  slide: {
+    width,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    gap: 10,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  description: {
+    fontSize: 20,
+    color: "#7A7A7A",
+    textAlign: "center",
+    paddingHorizontal: 30,
+  },
+  flatlistContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  footer: {
+    position: "absolute",
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  button: {
+    backgroundColor: "#4CAF50",
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 25,
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  dotsContainer: {
+    position: "absolute",
+    bottom: 120,
+    flexDirection: "row",
+  },
+  dot: {
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#7A7A7A",
+    marginHorizontal: 3,
+  },
+});

@@ -77,7 +77,9 @@ export default function RootLayout() {
   if (!loaded) {
     return null;
   }
-
+  // useEffect(() => {
+  //   clearAll();
+  // }, []);
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <NotificationProvider>
@@ -93,7 +95,10 @@ export default function RootLayout() {
                 options={{
                   headerShown: false,
                   statusBarBackgroundColor: "white",
-                  contentStyle: { backgroundColor: "#0D0D0D" },
+                  contentStyle: {
+                    backgroundColor: "#0D0D0D",
+                    paddingVertical: 40,
+                  },
                 }}
               />
               <Stack.Screen
