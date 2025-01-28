@@ -6,7 +6,7 @@ import * as Notifications from "expo-notifications";
 import { useEffect, useRef, useState } from "react";
 import { SQLiteDatabase, useSQLiteContext } from "expo-sqlite";
 import { usePushNotification } from "@/components/Notifications";
-import TryingClip from "@react-native-community/clipboard";
+
 import ClipFlatList from "@/components/ClipFlatList";
 import { StatusBar } from "expo-status-bar";
 const BACKGROUND_FETCH_TASK = "background-fetch";
@@ -17,8 +17,6 @@ let lastClipboardContent = "";
 // Define the background fetch task
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
-    // const clipboardContent = await TryingClip.getString();
-    console.log("clipboardContent");
     // Send a notification about the new clipboard content
     await Notifications.scheduleNotificationAsync({
       content: {
