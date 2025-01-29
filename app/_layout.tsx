@@ -16,7 +16,6 @@ import * as SecureStore from "expo-secure-store";
 import { AppState, AppStateStatus } from "react-native";
 import { PushNotificationProvider } from "@/components/Notifications";
 import { SQLiteDatabase, SQLiteProvider } from "expo-sqlite";
-import * as DevClient from "expo-dev-client";
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 

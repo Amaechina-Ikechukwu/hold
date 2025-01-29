@@ -28,15 +28,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "backgroundColor": "#ffffff"
-        }
-      ],
-      [
-        "expo-dev-client",
-        {
-          "launchMode": "most-recent"
+          "image": "./assets/images/splash-icon.png"
         }
       ]
     ],
