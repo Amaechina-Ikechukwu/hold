@@ -17,6 +17,11 @@ let lastClipboardContent = "";
 // Define the background fetch task
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
+     const content = await Clipboard.getStringAsync();
+
+     console.log(content);
+
+      
     // Send a notification about the new clipboard content
     await Notifications.scheduleNotificationAsync({
       content: {

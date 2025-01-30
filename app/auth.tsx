@@ -1,6 +1,6 @@
 import { View, Text } from "react-native";
 import React, { useState, useEffect, useCallback } from "react";
-import Keypad from "react-native-simple-keypad";
+import Keypad from "@/components/Reusable/Keypad"; // Import your custom Keypad
 import GradientView from "@/components/Reusable/GradientView";
 import { router, useFocusEffect } from "expo-router";
 import { mwidth } from "@/components/Reusable/ScreenDimensions";
@@ -88,38 +88,27 @@ export default function Auth() {
       <View
         style={{
           position: "absolute",
-          bottom: mwidth * 0.9,
+          bottom: mwidth * 0.2,
           left: 0,
           right: 0,
         }}
       >
+        {/* Custom Keypad */}
         <Keypad
           onKeyPress={(value) => {
-            if (typeof value === "string") {
-              // Ensure the value is a string
-              if (value.toLowerCase() === "delete") {
-                setCode((prev) => prev.slice(0, -1)); // Remove the last character
-              }
-            } else {
-              if (code.length < 6) {
-                const newCode = code + value;
-                setCode(newCode);
+            if (value === "delete") {
+              setCode((prev) => prev.slice(0, -1)); // Remove the last character
+            } else if (code.length < 6) {
+              const newCode = code + value;
+              setCode(newCode);
 
-                if (newCode.length === 6) {
-                  handleCodeComplete(newCode); // Call the handler when 6 digits are entered
-                }
+              if (newCode.length === 6) {
+                handleCodeComplete(newCode); // Call the handler when 6 digits are entered
               }
             }
           }}
-          textStyle={{ fontWeight: "600", fontSize: 30, color: "#7A7A7A" }}
-          backspaceIconFillColor="#7A7A7A"
-          backspaceIconStrokeColor="#FFFFFF"
-          bioMetricFillColor="#7A7A7A"
-          backspaceIconHeight={24}
-          backspaceIconWidth={33}
-          bioMetricIconHeight={28}
-          bioMetricIconWidth={28}
-          onBioAuthPress={handleBiometricAuth} // Trigger biometric authentication
+          showBioAuth={true}
+          onBiometricAuth={handleBiometricAuth} // Trigger biometric authentication
         />
       </View>
 

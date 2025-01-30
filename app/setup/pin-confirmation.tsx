@@ -1,34 +1,55 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { View, Text } from "react-native";
-import Keypad from "react-native-simple-keypad";
 import GradientView from "@/components/Reusable/GradientView";
 import * as SecureStore from "expo-secure-store";
 import { useNotification } from "@/components/contexts/InAppNotificationContext";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { mwidth } from "@/components/Reusable/ScreenDimensions";
+import Keypad from "@/components/Reusable/Keypad";
 
 export default function PinConfirmation() {
   const [code, setCode] = useState<string>(""); // Store input code
   const { showNotification } = useNotification();
   const { code: originalCode } = useLocalSearchParams<{ code: string }>();
   const navigation = useNavigation();
-  const handleCodeComplete = async (inputCode: string) => {
-    if (inputCode === originalCode) {
-      try {
-        await SecureStore.setItemAsync("userCode", inputCode); // Save securely
-        showNotification("PIN successfully set!");
-        router.push("/"); // Navigate to home or main app screen
-      } catch (error) {
-        showNotification("Failed to save PIN. Please try again.");
-      }
-    } else {
-      showNotification("PINs do not match. Try again.");
-      setCode(""); // Reset the entered code
-    }
-  };
+
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
+
+  // Memoized callback to handle code completion
+  const handleCodeComplete = useCallback(
+    async (inputCode: string) => {
+      if (inputCode === originalCode) {
+        try {
+          await SecureStore.setItemAsync("userCode", inputCode); // Save securely
+          showNotification("PIN successfully set!");
+          router.push("/"); // Navigate to home or main app screen
+        } catch (error) {
+          showNotification("Failed to save PIN. Please try again.");
+        }
+      } else {
+        showNotification("PINs do not match. Try again.");
+        setCode(""); // Reset the entered code
+      }
+    },
+    [originalCode, router, showNotification]
+  );
+
+  const handleKeyPress = (value: string) => {
+    // Don't update the state unnecessarily if we have reached the PIN length
+    if (value === "delete") {
+      setCode((prev) => prev.slice(0, -1)); // Remove last character
+    } else if (code.length < 6) {
+      const newCode = code + value;
+      setCode(newCode); // Update code
+
+      if (newCode.length === 6) {
+        handleCodeComplete(newCode); // Call handler when PIN is complete
+      }
+    }
+  };
+
   return (
     <GradientView
       viewStyle={{ flex: 1, justifyContent: "center", height: "100%" }}
@@ -60,25 +81,25 @@ export default function PinConfirmation() {
       <View
         style={{
           position: "absolute",
-          bottom: mwidth * 0.9,
+          bottom: mwidth * 0.2,
           left: 0,
           right: 0,
         }}
       >
         <Keypad
+          showBioAuth={false}
           onKeyPress={(value) => {
-            if (typeof value === "string" && value.toLowerCase() === "delete") {
-              setCode((prev) => prev.slice(0, -1)); // Remove last character
+            if (value === "delete") {
+              setCode((prev) => prev.slice(0, -1)); // Remove the last character
             } else if (code.length < 6) {
               const newCode = code + value;
               setCode(newCode);
 
               if (newCode.length === 6) {
-                handleCodeComplete(newCode); // Call handler when PIN is complete
+                handleCodeComplete(newCode); // Call the handler when 6 digits are entered
               }
             }
           }}
-          textStyle={{ fontWeight: "600", fontSize: 30, color: "#7A7A7A" }}
         />
       </View>
     </GradientView>
