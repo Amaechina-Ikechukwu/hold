@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import HoldText from "./Reusable/HoldText";
 import * as Clipboard from "expo-clipboard";
 import { AntDesign } from "@expo/vector-icons";
 import { useNotification } from "./contexts/InAppNotificationContext";
+import { mheight } from "./Reusable/ScreenDimensions";
 
 const { width } = Dimensions.get("window");
 
@@ -28,6 +29,8 @@ interface ClipboardItem {
 export default function ClipFlatList() {
   const [clipboardContent, setClipboardContent] = useState<ClipboardItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [refreshing, setRefreshing] = useState(false); // State for refresh
   const { showNotification } = useNotification();
   const db = useSQLiteContext();
 
@@ -49,7 +52,10 @@ export default function ClipFlatList() {
             <AntDesign name="delete" size={18} color="#7A7A7A" />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => copyToClipboard(content)}>
+        <TouchableOpacity
+          onPress={() => copyToClipboard(content)}
+          style={{ gap: 20 }}
+        >
           <HoldText fontFamily="Lalezar">{content}</HoldText>
           <HoldText fontFamily="Keania" style={{ fontSize: 16 }}>
             Tap to copy
@@ -85,7 +91,7 @@ export default function ClipFlatList() {
 
   const copyToClipboard = async (content: string) => {
     await Clipboard.setStringAsync(content);
-    showNotification(`Copied ${content}`);
+    showNotification(`Copied`);
   };
 
   async function getClipboardContent(
@@ -133,7 +139,22 @@ export default function ClipFlatList() {
       return [];
     }
   }
+  const deleteAllClipboardContent = async () => {
+    try {
+      const result = await db.runAsync("DELETE FROM clipboard_content");
 
+      if (result.changes > 0) {
+        setClipboardContent([]); // Clear the state
+        showNotification("All content removed");
+      }
+    } catch (error) {
+      console.error("Error deleting all clipboard content:", error);
+    }
+  };
+
+  // useEffect(() => {
+  //   deleteAllClipboardContent();
+  // }, []);
   useEffect(() => {
     const fetchClipboardContent = async () => {
       try {
@@ -148,7 +169,12 @@ export default function ClipFlatList() {
 
     fetchClipboardContent();
   }, []);
-
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    const data = await getClipboardContent(db);
+    setClipboardContent(data);
+    setRefreshing(false);
+  }, []);
   const renderItem = React.useCallback(
     ({ item }: { item: ClipboardItem }) => (
       <MemoizedGradientView
@@ -177,13 +203,22 @@ export default function ClipFlatList() {
     };
 
     return (
-      <Animated.View style={[styles.clipBox, { opacity: fadeAnim }]}>
+      <Animated.View
+        style={[
+          styles.clipBox,
+          {
+            opacity: fadeAnim,
+            gap: 20,
+          },
+        ]}
+      >
         <View style={{ position: "absolute", right: 20, top: 20, zIndex: 99 }}>
-          <TouchableOpacity onPress={handleDeleteWithAnimation}>
+          {/* <TouchableOpacity onPress={handleDeleteWithAnimation}>
             <AntDesign name="delete" size={18} color="#7A7A7A" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
         <TouchableOpacity
+          style={{ gap: 20 }}
           onPress={() =>
             copyToClipboard(
               "Addresses the issue of copied content being removed from the clipboard after a short duration by providing a persistent and secure storage solution."
@@ -213,10 +248,23 @@ export default function ClipFlatList() {
         justifyContent: "center",
         alignItems: "center",
       }}
-      ListEmptyComponent={<ListEmptyComponent />}
-      initialNumToRender={20} // Optimize initial rendering
-      maxToRenderPerBatch={5} // Render items in small batches
-      windowSize={5} // Adjust the window size for list recycling
+      ListEmptyComponent={
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            height: mheight,
+          }}
+        >
+          <ListEmptyComponent />
+        </View>
+      }
+      initialNumToRender={20}
+      maxToRenderPerBatch={5}
+      windowSize={5}
+      onRefresh={onRefresh} // Trigger refresh when pulled
+      refreshing={refreshing} // Show the refresh spinner while refreshing
     />
   );
 }

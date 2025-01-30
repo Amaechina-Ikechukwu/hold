@@ -17,19 +17,26 @@ let lastClipboardContent = "";
 // Define the background fetch task
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
-     const content = await Clipboard.getStringAsync();
+    //  Clipboard.addClipboardListener(
+    //    ({ contentTypes }: Clipboard.ClipboardEvent) => {
+    //      if (contentTypes.includes(Clipboard.ContentType.PLAIN_TEXT)) {
+    //        Clipboard.getStringAsync().then((content) => {
+    //          alert("Copy pasta! Here's the string that was copied: " + content);
+    //        });
+    //      } else if (contentTypes.includes(Clipboard.ContentType.IMAGE)) {
+    //        alert("Yay! Clipboard contains an image");
+    //      }
+    //    }
+    //  );
 
-     console.log(content);
-
-      
-    // Send a notification about the new clipboard content
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "New Clipboard Content Detected",
-        // body: clipboardContent,
-      },
-      trigger: null, // Immediate notification
-    });
+    // // Send a notification about the new clipboard content
+    // await Notifications.scheduleNotificationAsync({
+    //   content: {
+    //     title: "New Clipboard Content Detected",
+    //     // body: clipboardContent,
+    //   },
+    //   trigger: null, // Immediate notification
+    // });
 
     return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch (error) {
