@@ -6,13 +6,17 @@ import { useNotification } from "@/components/contexts/InAppNotificationContext"
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { mwidth } from "@/components/Reusable/ScreenDimensions";
 import Keypad from "@/components/Reusable/Keypad";
+import { holdstore } from "@/holdstore";
+import { useShallow } from "zustand/shallow";
 
 export default function PinConfirmation() {
   const [code, setCode] = useState<string>(""); // Store input code
   const { showNotification } = useNotification();
   const { code: originalCode } = useLocalSearchParams<{ code: string }>();
   const navigation = useNavigation();
-
+  const [isSignedIn, signIn] = holdstore(
+    useShallow((state) => [state.isSignedIn, state.signIn])
+  );
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
@@ -24,7 +28,8 @@ export default function PinConfirmation() {
         try {
           await SecureStore.setItemAsync("userCode", inputCode); // Save securely
           showNotification("PIN successfully set!");
-          router.push("/"); // Navigate to home or main app screen
+          signIn(); // Navigate to home or main app screen
+          router.push("/");
         } catch (error) {
           showNotification("Failed to save PIN. Please try again.");
         }

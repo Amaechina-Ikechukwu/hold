@@ -159,7 +159,12 @@ export default function ClipFlatList() {
     const fetchClipboardContent = async () => {
       try {
         const data = await getClipboardContent(db);
-        setClipboardContent(data);
+        // Remove duplicated content by filtering based on 'content' property
+        const uniqueData = data.filter(
+          (item, index, self) =>
+            index === self.findIndex((t) => t.content === item.content)
+        );
+        setClipboardContent(uniqueData);
       } catch (error) {
         console.error("Error fetching clipboard content:", error);
       } finally {
@@ -168,6 +173,29 @@ export default function ClipFlatList() {
     };
 
     fetchClipboardContent();
+  }, []);
+  useEffect(() => {
+    const intervalId = setInterval(async () => {
+      const fetchClipboardContent = async () => {
+        try {
+          const data = await getClipboardContent(db);
+          // Remove duplicated content by filtering based on 'content' property
+          const uniqueData = data.filter(
+            (item, index, self) =>
+              index === self.findIndex((t) => t.content === item.content)
+          );
+          setClipboardContent(uniqueData);
+        } catch (error) {
+          console.error("Error fetching clipboard content:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchClipboardContent();
+    }, 2000);
+
+    return () => clearInterval(intervalId);
   }, []);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

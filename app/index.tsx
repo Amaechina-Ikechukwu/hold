@@ -9,6 +9,10 @@ import { usePushNotification } from "@/components/Notifications";
 
 import ClipFlatList from "@/components/ClipFlatList";
 import { StatusBar } from "expo-status-bar";
+import { useNavigation } from "expo-router";
+import { holdstore } from "@/holdstore";
+import { useShallow } from "zustand/shallow";
+import { router } from "expo-router";
 const BACKGROUND_FETCH_TASK = "background-fetch";
 const OTP_REGEX = /\b\d{4,6}\b/; // Example regex for matching OTPs
 
@@ -63,8 +67,36 @@ export default function HomeScreen() {
   const [clipboardContent, setClipboardContent] = useState("");
   const db = useSQLiteContext();
   const { sendNotification } = usePushNotification();
-  const clipboardContentRef = useRef("");
-  const isCheckingClipboardRef = useRef(false);
+  const clipboardContentRef = useRef(""); // useRef inside component
+  const isCheckingClipboardRef = useRef(false); // useRef inside component
+  const [isSignedIn, signIn] = holdstore(
+    useShallow((state) => [state.isSignedIn, state.signIn])
+  );
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+      statusBarBackgroundColor: "white",
+      contentStyle: {
+        backgroundColor: "#0D0D0D",
+        paddingVertical: 40,
+      },
+    });
+  }, [navigation]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      if (e.data.action.type === "GO_BACK") {
+        e.preventDefault();
+        if (isSignedIn) {
+          router.replace("/");
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, isSignedIn]);
 
   useEffect(() => {
     const checkStatusAsync = async () => {
@@ -85,9 +117,9 @@ export default function HomeScreen() {
   }, [isRegistered]);
 
   useEffect(() => {
-    const intervalId = setInterval(async () => {
+    // Only start the clipboard checking if it is not already running
+    const clipboardCheckInterval = setInterval(async () => {
       if (isCheckingClipboardRef.current) return;
-
       isCheckingClipboardRef.current = true;
 
       try {
@@ -97,16 +129,23 @@ export default function HomeScreen() {
           const matchedOTP = content.match(OTP_REGEX);
 
           if (matchedOTP) {
-            sendNotification(
-              "Hold: Sensitive Content",
-              "Will not save the newly copied text...looks sensitive"
-            );
+            // sendNotification(
+            //   "Hold: Sensitive Content",
+            //   "Will not save the newly copied text...looks sensitive"
+            // );
           } else {
-            const result = await addClipboardContent(db, content, "text");
-            if (result !== -1) {
-              clipboardContentRef.current = content;
-              setClipboardContent(content);
-              lastClipboardContent = content;
+            // Check database before inserting
+            const existingContent = await db.getFirstAsync<{ count: number }>(
+              "SELECT COUNT(*) AS count FROM clipboard_content WHERE content = ?",
+              [content]
+            );
+
+            if (existingContent.count === 0) {
+              const result = await addClipboardContent(db, content, "text");
+              if (result !== -1) {
+                clipboardContentRef.current = content;
+                lastClipboardContent = content;
+              }
             }
           }
         }
@@ -115,9 +154,9 @@ export default function HomeScreen() {
       } finally {
         isCheckingClipboardRef.current = false;
       }
-    }, 15000);
+    }, 5000);
 
-    return () => clearInterval(intervalId);
+    return () => clearInterval(clipboardCheckInterval); // Clear the interval on cleanup
   }, []);
 
   async function addClipboardContent(
@@ -161,6 +200,7 @@ export default function HomeScreen() {
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   titleContainer: {
