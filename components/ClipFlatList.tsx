@@ -1,20 +1,26 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
-  Text,
-  FlatList,
+  SectionList,
   ActivityIndicator,
-  StyleSheet,
-  TouchableOpacity,
-  Dimensions,
   Animated,
+  Dimensions,
+  Text,
 } from "react-native";
 import { SQLiteDatabase, useSQLiteContext } from "expo-sqlite";
-import HoldText from "./Reusable/HoldText";
 import * as Clipboard from "expo-clipboard";
-import { AntDesign } from "@expo/vector-icons";
 import { useNotification } from "./contexts/InAppNotificationContext";
-import { mheight } from "./Reusable/ScreenDimensions";
+import { mheight, mwidth } from "./Reusable/ScreenDimensions";
+import ClipboardCard from "./Reusable/ClipboardCard";
+import { holdstore } from "@/holdstore";
+import { useShallow } from "zustand/shallow";
+import dayjs from "dayjs"; // Install for date formatting
+import localizedFormat from "dayjs/plugin/localizedFormat";
+import weekday from "dayjs/plugin/weekday";
+import HoldText from "./Reusable/HoldText";
+
+dayjs.extend(localizedFormat);
+dayjs.extend(weekday);
 
 const { width } = Dimensions.get("window");
 
@@ -23,67 +29,52 @@ interface ClipboardItem {
   content: string;
   content_type: string;
   metadata?: string;
-  fadeAnim: Animated.Value; // Add animation value for opacity
+  copied_at: string; // Ensure this field exists in your database
+  fadeAnim: Animated.Value;
 }
 
-export default function ClipFlatList() {
-  const [clipboardContent, setClipboardContent] = useState<ClipboardItem[]>([]);
-  const [loading, setLoading] = useState(true);
+interface SectionData {
+  title: string; // Formatted as "Monday, January 5, 2025"
+  data: ClipboardItem[];
+}
 
-  const [refreshing, setRefreshing] = useState(false); // State for refresh
+export default function ClipSectionList() {
+  const [clipboardContent, setClipboardContent] = useState<SectionData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [clipboardSections, addClipboardItem, removeClipboardItem] = holdstore(
+    useShallow((state) => [
+      state.clipboardSections,
+      state.addClipboardItem,
+      state.removeClipboardItem,
+    ])
+  );
   const { showNotification } = useNotification();
   const db = useSQLiteContext();
-
-  const MemoizedGradientView = React.memo(
-    ({
-      content,
-      id,
-      fadeAnim,
-    }: {
-      content: string;
-      id: number;
-      fadeAnim: Animated.Value;
-    }) => (
-      <Animated.View style={[styles.clipBox, { opacity: fadeAnim }]}>
-        <View style={{ position: "absolute", right: 20, top: 20, zIndex: 99 }}>
-          <TouchableOpacity
-            onPress={() => deleteClipboardContent(id, fadeAnim)}
-          >
-            <AntDesign name="delete" size={18} color="#7A7A7A" />
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity
-          onPress={() => copyToClipboard(content)}
-          style={{ gap: 20 }}
-        >
-          <HoldText fontFamily="Lalezar">{content}</HoldText>
-          <HoldText fontFamily="Keania" style={{ fontSize: 16 }}>
-            Tap to copy
-          </HoldText>
-        </TouchableOpacity>
-      </Animated.View>
-    )
-  );
 
   const deleteClipboardContent = async (
     id: number,
     fadeAnim: Animated.Value
-  ): Promise<void> => {
+  ) => {
     Animated.timing(fadeAnim, {
-      toValue: 0, // Animate opacity to 0
-      duration: 300, // Animation duration
+      toValue: 0,
+      duration: 300,
       useNativeDriver: true,
     }).start(async () => {
-      // Remove the item after the animation completes
       const result = await db.runAsync(
         "DELETE FROM clipboard_content WHERE id = ?",
         id
       );
-
       if (result.changes > 0) {
-        setClipboardContent((prevContent) =>
-          prevContent.filter((item) => item.id !== id)
+        setClipboardContent((prevSections) =>
+          prevSections
+            .map((section) => ({
+              ...section,
+              data: section.data.filter((item) => item.id !== id),
+            }))
+            .filter((section) => section.data.length > 0)
         );
+        removeClipboardItem(id);
         showNotification("Removed");
       }
     });
@@ -91,80 +82,43 @@ export default function ClipFlatList() {
 
   const copyToClipboard = async (content: string) => {
     await Clipboard.setStringAsync(content);
-    showNotification(`Copied`);
+    showNotification("Copied");
   };
 
   async function getClipboardContent(
-    db: SQLiteDatabase,
-    filters?: { contentType?: string; content?: string }
-  ): Promise<ClipboardItem[]> {
+    db: SQLiteDatabase
+  ): Promise<SectionData[]> {
     try {
-      let query = "SELECT * FROM clipboard_content";
-      const queryParams: any[] = [];
+      let query = "SELECT * FROM clipboard_content ORDER BY copied_at DESC";
+      const results = (await db.getAllAsync(query)) as ClipboardItem[];
 
-      if (filters) {
-        const conditions: string[] = [];
+      // Group by formatted date
+      const groupedData = results.reduce(
+        (acc: Record<string, ClipboardItem[]>, item) => {
+          const dateKey = dayjs(item.copied_at).format("dddd, MMMM D, YYYY"); // e.g., "Monday, January 5, 2025"
+          if (!acc[dateKey]) acc[dateKey] = [];
+          acc[dateKey].push({ ...item, fadeAnim: new Animated.Value(1) });
+          return acc;
+        },
+        {}
+      );
 
-        if (filters.contentType) {
-          conditions.push("content_type = ?");
-          queryParams.push(filters.contentType);
-        }
-
-        if (filters.content) {
-          conditions.push("content LIKE ?");
-          queryParams.push(`%${filters.content}%`);
-        }
-
-        if (conditions.length > 0) {
-          query += " WHERE " + conditions.join(" AND ");
-        }
-      }
-
-      query += " ORDER BY id DESC";
-
-      const results = (await db.getAllAsync(query, queryParams)) as Array<{
-        id: number;
-        content: string;
-        content_type: string;
-        metadata?: string;
-      }>;
-
-      // Add a fadeAnim property for each item
-      return results.map((item) => ({
-        ...item,
-        fadeAnim: new Animated.Value(1), // Initial opacity is 1
+      // Convert to SectionList format
+      return Object.keys(groupedData).map((date) => ({
+        title: date,
+        data: groupedData[date],
       }));
     } catch (error) {
       console.error("Error fetching clipboard content:", error);
       return [];
     }
   }
-  const deleteAllClipboardContent = async () => {
-    try {
-      const result = await db.runAsync("DELETE FROM clipboard_content");
 
-      if (result.changes > 0) {
-        setClipboardContent([]); // Clear the state
-        showNotification("All content removed");
-      }
-    } catch (error) {
-      console.error("Error deleting all clipboard content:", error);
-    }
-  };
-
-  // useEffect(() => {
-  //   deleteAllClipboardContent();
-  // }, []);
   useEffect(() => {
     const fetchClipboardContent = async () => {
       try {
         const data = await getClipboardContent(db);
-        // Remove duplicated content by filtering based on 'content' property
-        const uniqueData = data.filter(
-          (item, index, self) =>
-            index === self.findIndex((t) => t.content === item.content)
-        );
-        setClipboardContent(uniqueData);
+        setClipboardContent(data);
       } catch (error) {
         console.error("Error fetching clipboard content:", error);
       } finally {
@@ -174,103 +128,60 @@ export default function ClipFlatList() {
 
     fetchClipboardContent();
   }, []);
+
   useEffect(() => {
     const intervalId = setInterval(async () => {
-      const fetchClipboardContent = async () => {
-        try {
-          const data = await getClipboardContent(db);
-          // Remove duplicated content by filtering based on 'content' property
-          const uniqueData = data.filter(
-            (item, index, self) =>
-              index === self.findIndex((t) => t.content === item.content)
-          );
-          setClipboardContent(uniqueData);
-        } catch (error) {
-          console.error("Error fetching clipboard content:", error);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchClipboardContent();
+      const data = await getClipboardContent(db);
+      setClipboardContent(data);
     }, 2000);
 
     return () => clearInterval(intervalId);
   }, []);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     const data = await getClipboardContent(db);
     setClipboardContent(data);
     setRefreshing(false);
   }, []);
-  const renderItem = React.useCallback(
-    ({ item }: { item: ClipboardItem }) => (
-      <MemoizedGradientView
-        content={item.content}
-        id={item.id}
-        fadeAnim={item.fadeAnim}
-      />
-    ),
-    []
-  );
 
   if (loading) {
     return <ActivityIndicator size="large" color="#0000ff" />;
   }
-  const ListEmptyComponent = React.memo(() => {
-    const fadeAnim = React.useRef(new Animated.Value(1)).current;
-
-    const handleDeleteWithAnimation = () => {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
-        showNotification("Item removed"); // Replace with specific logic if needed
-      });
-    };
-
-    return (
-      <Animated.View
-        style={[
-          styles.clipBox,
-          {
-            opacity: fadeAnim,
-            gap: 20,
-          },
-        ]}
-      >
-        <View style={{ position: "absolute", right: 20, top: 20, zIndex: 99 }}>
-          {/* <TouchableOpacity onPress={handleDeleteWithAnimation}>
-            <AntDesign name="delete" size={18} color="#7A7A7A" />
-          </TouchableOpacity> */}
-        </View>
-        <TouchableOpacity
-          style={{ gap: 20 }}
-          onPress={() =>
-            copyToClipboard(
-              "Addresses the issue of copied content being removed from the clipboard after a short duration by providing a persistent and secure storage solution."
-            )
-          }
-        >
-          <HoldText fontFamily="Lalezar">
-            Hold addresses the issue of copied content being removed from the
-            clipboard after a short duration by providing a persistent and
-            secure storage solution.
-          </HoldText>
-          <HoldText fontFamily="Keania" style={{ fontSize: 16 }}>
-            Tap to copy
-          </HoldText>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  });
 
   return (
-    <FlatList
-      data={clipboardContent}
+    <SectionList
+      sections={clipboardContent}
       keyExtractor={(item) => item.id.toString()}
-      renderItem={renderItem}
+      renderItem={({ item }) => (
+        <View
+          style={{
+            width: mwidth,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <ClipboardCard
+            content={item.content}
+            id={item.id}
+            fadeAnim={item.fadeAnim}
+            onDelete={deleteClipboardContent}
+            onCopy={copyToClipboard}
+          />
+        </View>
+      )}
+      renderSectionHeader={({ section: { title } }) => (
+        <HoldText
+          fontFamily="Keania"
+          style={{
+            fontSize: 22,
+
+            marginVertical: 10,
+          }}
+        >
+          {title}
+        </HoldText>
+      )}
       contentContainerStyle={{
         gap: 20,
         justifyContent: "center",
@@ -285,30 +196,20 @@ export default function ClipFlatList() {
             height: mheight,
           }}
         >
-          <ListEmptyComponent />
+          <ClipboardCard
+            content="Hold addresses the issue of copied content being removed from the clipboard after a short duration by providing a persistent and secure storage solution."
+            id={-1}
+            fadeAnim={new Animated.Value(1)}
+            onDelete={() => {}}
+            onCopy={copyToClipboard}
+          />
         </View>
       }
-      initialNumToRender={20}
+      initialNumToRender={10}
       maxToRenderPerBatch={5}
       windowSize={5}
-      onRefresh={onRefresh} // Trigger refresh when pulled
-      refreshing={refreshing} // Show the refresh spinner while refreshing
+      onRefresh={onRefresh}
+      refreshing={refreshing}
     />
   );
 }
-
-const styles = StyleSheet.create({
-  clipBox: {
-    minHeight: 100,
-    borderRadius: 30,
-    backgroundColor: "#1a1918",
-    width: width * 0.9,
-    padding: 30,
-    shadowColor: "#9c9c9c", // Ash-like shadow color
-    shadowOffset: { width: 10, height: 14 }, // Shadow offset
-    shadowOpacity: 0.3, // Shadow opacity
-    shadowRadius: 30, // Shadow blur radius
-    elevation: 5, // Shadow for Android
-    gap: 20,
-  },
-});
