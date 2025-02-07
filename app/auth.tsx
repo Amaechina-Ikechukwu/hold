@@ -80,6 +80,7 @@ export default function Auth() {
     if (inputCode === storedCode) {
       showNotification("Authentication Successful!");
       signIn(); // Navigate upon successful code entry
+       router.push("/");
     } else {
       showNotification("Incorrect Code. Please try again.");
       setCode(""); // Reset the entered code

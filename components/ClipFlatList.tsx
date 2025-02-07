@@ -44,7 +44,7 @@ export default function ClipSectionList() {
   const [refreshing, setRefreshing] = useState(false);
   const [clipboardSections, addClipboardItem, removeClipboardItem] = holdstore(
     useShallow((state) => [
-      state.clipboardSections,
+      state.filteredClipboardSections,
       state.addClipboardItem,
       state.removeClipboardItem,
     ])
@@ -92,21 +92,36 @@ export default function ClipSectionList() {
       let query = "SELECT * FROM clipboard_content ORDER BY copied_at DESC";
       const results = (await db.getAllAsync(query)) as ClipboardItem[];
 
+      // Ensure each item has a unique ID
+      const uniqueItemsMap = new Map<number, ClipboardItem>();
+
+      results.forEach((item) => {
+        if (!uniqueItemsMap.has(item.id)) {
+          uniqueItemsMap.set(item.id, {
+            ...item,
+            fadeAnim: new Animated.Value(1),
+          });
+        }
+      });
+
       // Group by formatted date
-      const groupedData = results.reduce(
+      const groupedData = Array.from(uniqueItemsMap.values()).reduce(
         (acc: Record<string, ClipboardItem[]>, item) => {
-          const dateKey = dayjs(item.copied_at).format("dddd, MMMM D, YYYY"); // e.g., "Monday, January 5, 2025"
+          const dateKey = dayjs(item.copied_at).format("dddd, MMMM D, YYYY");
           if (!acc[dateKey]) acc[dateKey] = [];
-          acc[dateKey].push({ ...item, fadeAnim: new Animated.Value(1) });
+          acc[dateKey].push(item);
           return acc;
         },
         {}
       );
 
-      // Convert to SectionList format
+      // Convert to SectionList format with unique IDs
       return Object.keys(groupedData).map((date) => ({
         title: date,
-        data: groupedData[date],
+        data: groupedData[date].map((item, index) => ({
+          ...item,
+          id: item.id ?? index + 1, // Ensure each item has a unique ID
+        })),
       }));
     } catch (error) {
       console.error("Error fetching clipboard content:", error);
@@ -118,7 +133,7 @@ export default function ClipSectionList() {
     const fetchClipboardContent = async () => {
       try {
         const data = await getClipboardContent(db);
-        setClipboardContent(data);
+        addClipboardItem(data);
       } catch (error) {
         console.error("Error fetching clipboard content:", error);
       } finally {
@@ -130,28 +145,39 @@ export default function ClipSectionList() {
   }, []);
 
   useEffect(() => {
-    const intervalId = setInterval(async () => {
-      const data = await getClipboardContent(db);
-      setClipboardContent(data);
-    }, 2000);
+    let intervalId: NodeJS.Timeout | null = null;
 
-    return () => clearInterval(intervalId);
-  }, []);
+    // Check if search is active
+    const isSearching =
+      clipboardSections !== holdstore.getState().clipboardSections;
+
+    if (!isSearching) {
+      intervalId = setInterval(async () => {
+        const data = await getClipboardContent(db);
+        addClipboardItem(data);
+      }, 2000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [clipboardSections]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     const data = await getClipboardContent(db);
-    setClipboardContent(data);
+
+    addClipboardItem(data);
     setRefreshing(false);
   }, []);
-
+  useEffect(() => {}, [clipboardSections]);
   if (loading) {
     return <ActivityIndicator size="large" color="#0000ff" />;
   }
 
   return (
     <SectionList
-      sections={clipboardContent}
+      sections={clipboardSections}
       keyExtractor={(item) => item.id.toString()}
       renderItem={({ item }) => (
         <View
@@ -164,7 +190,7 @@ export default function ClipSectionList() {
           <ClipboardCard
             content={item.content}
             id={item.id}
-            fadeAnim={item.fadeAnim}
+            fadeAnim={item?.fadeAnim}
             onDelete={deleteClipboardContent}
             onCopy={copyToClipboard}
           />

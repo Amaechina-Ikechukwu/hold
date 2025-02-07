@@ -13,6 +13,7 @@ import { useNavigation } from "expo-router";
 import { holdstore } from "@/holdstore";
 import { useShallow } from "zustand/shallow";
 import { router } from "expo-router";
+import ExpandableSearch from "@/components/Reusable/ExpandableSearch";
 const BACKGROUND_FETCH_TASK = "background-fetch";
 const OTP_REGEX = /\b\d{4,6}\b/; // Example regex for matching OTPs
 
@@ -76,11 +77,17 @@ export default function HomeScreen() {
 
   useEffect(() => {
     navigation.setOptions({
-      headerShown: false,
-      statusBarBackgroundColor: "white",
+      headerShown: true,
+      title: "HOLD",
+      headerRight: () => <ExpandableSearch />,
+      statusBarBackgroundColor: "transparent",
+      headerStyle: {
+        backgroundColor: "#1a1918",
+      },
+      headerLeft: () => <View></View>,
       contentStyle: {
         backgroundColor: "#0D0D0D",
-        paddingVertical: 40,
+        // paddingVertical: 40,
       },
     });
   }, [navigation]);

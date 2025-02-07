@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import dayjs from "dayjs";
+import { Animated } from "react-native";
 
 interface ClipboardItem {
   id: number;
@@ -7,6 +8,7 @@ interface ClipboardItem {
   content_type: string;
   metadata?: string;
   copied_at: string;
+  fadeAnim: Animated.Value;
 }
 
 interface SectionData {
@@ -22,7 +24,10 @@ interface AuthState {
 
 interface ClipboardState {
   clipboardSections: SectionData[];
-  addClipboardItem: (item: ClipboardItem) => void;
+  filteredClipboardSections: SectionData[]; // New state for search results
+  addClipboardItem: (sections: SectionData[]) => void;
+  searchClipboard: (query: string) => void;
+  cancelSearch: () => void;
   removeClipboardItem: (id: number) => void;
   clearClipboard: () => void;
 }
@@ -34,25 +39,76 @@ export const holdstore = create<AuthState & ClipboardState>((set) => ({
   signOut: () => set({ isSignedIn: false }),
 
   // Clipboard state
-  clipboardSections: [], // Initialize clipboardSections properly
+  clipboardSections: [],
+  filteredClipboardSections: [],
 
-  addClipboardItem: (item: ClipboardItem) =>
+  addClipboardItem: (sections: SectionData[]) =>
     set((state) => {
-      const dateKey = dayjs(item.copied_at).format("dddd, MMMM D, YYYY");
       const updatedSections = [...state.clipboardSections];
 
-      const existingSection = updatedSections.find(
-        (section) => section.title === dateKey
-      );
+      sections.forEach((section) => {
+        if (section.data.length === 0) return;
 
-      if (existingSection) {
-        existingSection.data.unshift(item);
-      } else {
-        updatedSections.unshift({ title: dateKey, data: [item] });
-      }
+        const dateKey = dayjs(section.data[0].copied_at).format(
+          "dddd, MMMM D, YYYY"
+        );
 
-      return { clipboardSections: updatedSections };
+        let existingSection = updatedSections.find(
+          (sec) => sec.title === dateKey
+        );
+
+        const newItems = section.data.map((item) => ({
+          ...item,
+          fadeAnim: new Animated.Value(1),
+        }));
+
+        if (existingSection) {
+          const existingIds = new Set(
+            existingSection.data.map((item) => item.id)
+          );
+          const existingContents = new Set(
+            existingSection.data.map((item) => item.content.toLowerCase())
+          );
+
+          // Remove duplicates based on ID and content
+          const uniqueNewItems = newItems.filter(
+            (item) =>
+              !existingIds.has(item.id) &&
+              !existingContents.has(item.content.toLowerCase())
+          );
+
+          existingSection.data.unshift(...uniqueNewItems);
+        } else {
+          updatedSections.unshift({ title: dateKey, data: newItems });
+        }
+      });
+
+      return {
+        clipboardSections: updatedSections,
+        filteredClipboardSections: updatedSections,
+      };
     }),
+
+  searchClipboard: (query: string) =>
+    set((state) => {
+      if (!query) return { filteredClipboardSections: state.clipboardSections };
+
+      const filteredSections = state.clipboardSections
+        .map((section) => ({
+          ...section,
+          data: section.data.filter((item) =>
+            item.content.toLowerCase().includes(query.toLowerCase())
+          ),
+        }))
+        .filter((section) => section.data.length > 0);
+
+      return { filteredClipboardSections: filteredSections };
+    }),
+
+  cancelSearch: () =>
+    set((state) => ({
+      filteredClipboardSections: state.clipboardSections,
+    })),
 
   removeClipboardItem: (id: number) =>
     set((state) => {
@@ -61,10 +117,14 @@ export const holdstore = create<AuthState & ClipboardState>((set) => ({
           ...section,
           data: section.data.filter((item) => item.id !== id),
         }))
-        .filter((section) => section.data.length > 0); // Remove empty sections
+        .filter((section) => section.data.length > 0);
 
-      return { clipboardSections: updatedSections };
+      return {
+        clipboardSections: updatedSections,
+        filteredClipboardSections: updatedSections,
+      };
     }),
 
-  clearClipboard: () => set({ clipboardSections: [] }),
+  clearClipboard: () =>
+    set({ clipboardSections: [], filteredClipboardSections: [] }),
 }));
