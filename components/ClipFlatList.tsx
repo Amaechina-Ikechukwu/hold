@@ -51,83 +51,92 @@ export default function ClipSectionList() {
   );
   const { showNotification } = useNotification();
   const db = useSQLiteContext();
+const deletedClipboardItems = new Set<string>();
 
-  const deleteClipboardContent = async (
-    id: number,
-    fadeAnim: Animated.Value
-  ) => {
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(async () => {
-      const result = await db.runAsync(
-        "DELETE FROM clipboard_content WHERE id = ?",
-        id
+const deleteClipboardContent = async (id: number, fadeAnim: Animated.Value) => {
+  Animated.timing(fadeAnim, {
+    toValue: 0,
+    duration: 300,
+    useNativeDriver: true,
+  }).start(async () => {
+    const result = await db.runAsync(
+      "DELETE FROM clipboard_content WHERE id = ?",
+      id
+    );
+    if (result.changes > 0) {
+      setClipboardContent((prevSections) =>
+        prevSections
+          .map((section) => ({
+            ...section,
+            data: section.data.filter((item) => {
+              if (item.id === id) {
+                deletedClipboardItems.add(item.content); // Track deleted content
+              }
+              return item.id !== id;
+            }),
+          }))
+          .filter((section) => section.data.length > 0)
       );
-      if (result.changes > 0) {
-        setClipboardContent((prevSections) =>
-          prevSections
-            .map((section) => ({
-              ...section,
-              data: section.data.filter((item) => item.id !== id),
-            }))
-            .filter((section) => section.data.length > 0)
-        );
-        removeClipboardItem(id);
-        showNotification("Removed");
+      removeClipboardItem(id);
+      showNotification("Removed");
+    }
+  });
+};
+
+const copyToClipboard = async (content: string) => {
+  await Clipboard.setStringAsync(content);
+  showNotification("Copied");
+};
+
+const getClipboardContent = async (
+  db: SQLiteDatabase
+): Promise<SectionData[]> => {
+  try {
+    let query = "SELECT * FROM clipboard_content ORDER BY copied_at DESC";
+    const results = (await db.getAllAsync(query)) as ClipboardItem[];
+
+    // Filter out deleted content
+    const filteredResults = results.filter(
+      (item) => !deletedClipboardItems.has(item.content)
+    );
+
+    // Ensure unique IDs and format data
+    const uniqueItemsMap = new Map<number, ClipboardItem>();
+    filteredResults.forEach((item) => {
+      if (!uniqueItemsMap.has(item.id)) {
+        uniqueItemsMap.set(item.id, {
+          ...item,
+          fadeAnim: new Animated.Value(1),
+        });
       }
     });
-  };
 
-  const copyToClipboard = async (content: string) => {
-    await Clipboard.setStringAsync(content);
-    showNotification("Copied");
-  };
+    // Group by formatted date
+    const groupedData = Array.from(uniqueItemsMap.values()).reduce(
+      (acc: Record<string, ClipboardItem[]>, item) => {
+        const dateKey = dayjs(item.copied_at).format("dddd, MMMM D, YYYY");
+        if (!acc[dateKey]) acc[dateKey] = [];
+        acc[dateKey].push(item);
+        return acc;
+      },
+      {}
+    );
 
-  async function getClipboardContent(
-    db: SQLiteDatabase
-  ): Promise<SectionData[]> {
-    try {
-      let query = "SELECT * FROM clipboard_content ORDER BY copied_at DESC";
-      const results = (await db.getAllAsync(query)) as ClipboardItem[];
+    // Sort dates in descending order (newest first)
+    const sortedDates = Object.keys(groupedData).sort(
+      (a, b) => dayjs(b).valueOf() - dayjs(a).valueOf()
+    );
 
-      // Ensure each item has a unique ID
-      const uniqueItemsMap = new Map<number, ClipboardItem>();
-
-      results.forEach((item) => {
-        if (!uniqueItemsMap.has(item.id)) {
-          uniqueItemsMap.set(item.id, {
-            ...item,
-            fadeAnim: new Animated.Value(1),
-          });
-        }
-      });
-
-      // Group by formatted date
-      const groupedData = Array.from(uniqueItemsMap.values()).reduce(
-        (acc: Record<string, ClipboardItem[]>, item) => {
-          const dateKey = dayjs(item.copied_at).format("dddd, MMMM D, YYYY");
-          if (!acc[dateKey]) acc[dateKey] = [];
-          acc[dateKey].push(item);
-          return acc;
-        },
-        {}
-      );
-
-      // Convert to SectionList format with unique IDs
-      return Object.keys(groupedData).map((date) => ({
-        title: date,
-        data: groupedData[date].map((item, index) => ({
-          ...item,
-          id: item.id ?? index + 1, // Ensure each item has a unique ID
-        })),
-      }));
-    } catch (error) {
-      console.error("Error fetching clipboard content:", error);
-      return [];
-    }
+    return sortedDates.map((date) => ({
+      title: date,
+      data: groupedData[date],
+    }));
+  } catch (error) {
+    console.error("Error fetching clipboard content:", error);
+    return [];
   }
+};
+
 
   useEffect(() => {
     const fetchClipboardContent = async () => {

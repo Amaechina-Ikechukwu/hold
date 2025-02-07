@@ -79,9 +79,16 @@ export const holdstore = create<AuthState & ClipboardState>((set) => ({
 
           existingSection.data.unshift(...uniqueNewItems);
         } else {
-          updatedSections.unshift({ title: dateKey, data: newItems });
+          updatedSections.push({ title: dateKey, data: newItems });
         }
       });
+
+      // **Sort sections by date (Newest First)**
+      updatedSections.sort(
+        (a, b) =>
+          dayjs(b.title, "dddd, MMMM D, YYYY").valueOf() -
+          dayjs(a.title, "dddd, MMMM D, YYYY").valueOf()
+      );
 
       return {
         clipboardSections: updatedSections,
@@ -128,3 +135,4 @@ export const holdstore = create<AuthState & ClipboardState>((set) => ({
   clearClipboard: () =>
     set({ clipboardSections: [], filteredClipboardSections: [] }),
 }));
+
