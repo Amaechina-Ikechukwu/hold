@@ -55,7 +55,11 @@ const ClipboardCard: React.FC<ClipboardCardProps> = ({
           renderImage={(image) => (
             <Image
               src={image.url}
-              style={{ aspectRatio: 4 / 3, resizeMode: "contain" }}
+              style={{
+                aspectRatio: 4 / 3,
+                resizeMode: "contain",
+                borderRadius: 10,
+              }}
             />
           )}
           text={link}

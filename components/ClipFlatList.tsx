@@ -123,9 +123,12 @@ const getClipboardContent = async (
     );
 
     // Sort dates in descending order (newest first)
-    const sortedDates = Object.keys(groupedData).sort(
-      (a, b) => dayjs(b).valueOf() - dayjs(a).valueOf()
-    );
+ const sortedDates = Object.keys(groupedData).sort(
+   (a, b) =>
+     dayjs(groupedData[b][0].copied_at).valueOf() -
+     dayjs(groupedData[a][0].copied_at).valueOf()
+ );
+
 
     return sortedDates.map((date) => ({
       title: date,

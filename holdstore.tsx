@@ -84,11 +84,12 @@ export const holdstore = create<AuthState & ClipboardState>((set) => ({
       });
 
       // **Sort sections by date (Newest First)**
-      updatedSections.sort(
-        (a, b) =>
-          dayjs(b.title, "dddd, MMMM D, YYYY").valueOf() -
-          dayjs(a.title, "dddd, MMMM D, YYYY").valueOf()
-      );
+     updatedSections.sort(
+       (a, b) =>
+         dayjs(b.data[0].copied_at).valueOf() -
+         dayjs(a.data[0].copied_at).valueOf()
+     );
+
 
       return {
         clipboardSections: updatedSections,
